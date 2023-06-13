@@ -34,6 +34,10 @@ python_meta_re = re.compile(br"#\s*META:\s*(\w*)=(.*)$")
 
 reference_file_re = re.compile(r'(^|[\-_])(not)?ref[0-9]*([\-_]|$)')
 
+# Test Spec regex, e.g.
+# <link rel="help" href="https://www.w3.org/TR/accelerometer/">.
+js_link_re = re.compile(br"<link\s*rel=\"?help\"?\s.*href=\"(.*)\".*>$")
+
 space_chars: Text = "".join(html5lib.constants.spaceCharacters)
 
 
@@ -62,6 +66,21 @@ def read_script_metadata(f: BinaryIO, regexp: Pattern[bytes]) -> Iterable[Tuple[
 
         yield (m.groups()[0].decode("utf8"), m.groups()[1].decode("utf8"))
 
+def read_spec_link(f: BinaryIO, regexp: Pattern[bytes]) -> Iterable[Text]:
+    """
+    Yields spec information from the file-like object `f`,
+    as specified according to a supplied regexp.
+    `regexp` - Regexp containing one group, a href string.
+    """
+    for line in f:
+        assert isinstance(line, bytes), line
+        m = regexp.match(line)
+        if not m:
+            continue
+        # Early termination when hit the <script> tag.
+        if not m and line.startswith(b'<script'):
+            break
+        yield m.groups()[0].decode("utf8")
 
 _any_variants: Dict[Text, Dict[Text, Any]] = {
     "window": {"suffix": ".any.html"},
@@ -442,6 +461,11 @@ class SourceFile:
 
         with self.open() as f:
             return list(read_script_metadata(f, regexp))
+
+    @cached_property
+    def script_spec_link(self) -> Optional[List[Text]]:
+        with self.open() as f:
+            return list(read_spec_link(f, js_link_re))
 
     @cached_property
     def timeout(self) -> Optional[Text]:

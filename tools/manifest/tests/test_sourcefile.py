@@ -6,7 +6,8 @@ import pytest
 
 from io import BytesIO
 from ...lint.lint import check_global_metadata
-from ..sourcefile import SourceFile, read_script_metadata, js_meta_re, python_meta_re
+from ..sourcefile import (SourceFile, read_script_metadata, js_meta_re, python_meta_re,
+                          read_spec_link, js_link_re)
 
 
 def create(filename, contents=b""):
@@ -480,6 +481,21 @@ test()"""
 def test_script_metadata(input, expected):
     metadata = read_script_metadata(BytesIO(input), js_meta_re)
     assert list(metadata) == expected
+
+
+@pytest.mark.parametrize("input,expected", [
+    (b"""<link rel="help" title="Intel" href="foo">\n""", ["foo"]),
+    (b"""<link rel=help title="Intel" href="foo">\n""", ["foo"]),
+    (b"""<link  rel=help  href="foo" >\n""", ["foo"]),
+    (b"""<link rel="author" href="foo">\n""", []),
+    (b"""<link href="foo">\n""", []),
+    (b"""<link rel="help" href="foo">\n<link rel="help" href="bar">\n""", ["foo", "bar"]),
+    (b"""<link rel="help" href="foo">\n<script>\n""", ["foo"]),
+    (b"""random\n""", []),
+])
+def test_script_spec_link(input, expected):
+    spec_list = read_spec_link(BytesIO(input), js_link_re)
+    assert list(spec_list) == expected
 
 
 @pytest.mark.parametrize("ext", ["htm", "html"])
